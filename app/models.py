@@ -57,6 +57,15 @@ class Device(db.Model):
         back_populates="devices"
     )
 
+    def export_data(self):
+        return {
+            "device_id": self.device_id,
+            "name": self.name,
+            "mgmt_address": self.mgmt_address,
+            "vendor": self.vendor,
+            "created_at": self.created_at.isoformat()
+        }
+
 
 class DeviceGroup(db.Model):
     group_id = db.Column(

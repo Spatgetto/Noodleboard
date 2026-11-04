@@ -8,7 +8,9 @@ devices_bp = Blueprint("devices", __name__)
 
 @devices_bp.route("/", methods=["GET"])
 def get_devices():
-    return {"message": "List of devices"}
+    devices = Device.query.all()
+
+    return jsonify([device.export_data() for device in devices])
 
 @devices_bp.route("/", methods=["POST"])
 def create_device():
@@ -39,7 +41,7 @@ def create_device():
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-    return {"message": "Management IP already exists"}, 409
+        return {"message": "Database integrity constraint violated"}, 409
 
     return {"message": "Device created successfully"}, 201
     
@@ -48,10 +50,4 @@ def get_device(device_id):
     device = db.session.get(Device, device_id)
     if not device:
         return {"message": "Device not found"}, 404
-    return {
-        "device_id": device.device_id,
-        "name": device.name,
-        "mgmt_address": device.mgmt_address,
-        "vendor": device.vendor,
-        "created_at": device.created_at.isoformat()
-    }
+    return device.export_data()
