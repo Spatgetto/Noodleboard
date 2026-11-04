@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from app import db    
 from app.models import Device
 from app.services.validators import is_valid_ip
+from sqlalchemy.exc import IntegrityError
 
 devices_bp = Blueprint("devices", __name__)
 
@@ -18,6 +19,10 @@ def create_device():
         for field in ("name", "mgmt_address", "vendor")
     ):
         return {"message": "Invalid request body"}, 400
+    
+    for field in ("name", "vendor"):
+        if not isinstance(data[field], str) or not data[field].strip():
+            return {"message": f"Invalid {field}"}, 400
 
     if not isinstance(data["mgmt_address"], str) or not is_valid_ip(data["mgmt_address"]):
         return {"message": "Invalid management IP address"}, 400
@@ -29,7 +34,12 @@ def create_device():
     )
 
     db.session.add(device)
-    db.session.commit()
+    
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+    return {"message": "Management IP already exists"}, 409
 
     return {"message": "Device created successfully"}, 201
     
