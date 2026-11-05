@@ -1,7 +1,7 @@
 from flask import Blueprint, jsonify, request, url_for
 from app import db    
 from app.models import Device
-from app.services.validators import is_valid_ip
+from app.services.validators import is_valid_device_data
 from sqlalchemy.exc import IntegrityError
 
 devices_bp = Blueprint("devices", __name__)
@@ -18,20 +18,10 @@ def get_devices():
 # Creates a new device
 @devices_bp.route("/", methods=["POST"])
 def create_device():
-    data = request.get_json()
+    data = request.get_json(silent=True)
 
-    if not data or not all(
-        field in data
-        for field in ("name", "mgmt_address", "vendor")
-    ):
-        return {"message": "Invalid request body"}, 400
-    
-    for field in ("name", "vendor"):
-        if not isinstance(data[field], str) or not data[field].strip():
-            return {"message": f"Invalid {field}"}, 400
-
-    if not isinstance(data["mgmt_address"], str) or not is_valid_ip(data["mgmt_address"]):
-        return {"message": "Invalid management IP address"}, 400
+    if not is_valid_device_data(data):
+        return {"message": "Invalid device data"}, 400
 
     device = Device(
         name = data["name"].strip(),
@@ -70,19 +60,10 @@ def update_device(device_id):
     if not device:
         return {"message": "Device not found"}, 404
 
-    data = request.get_json()
-    if not data or not all(
-        field in data
-        for field in ("name", "mgmt_address", "vendor")
-    ):
-        return {"message": "Invalid request body"}, 400
-    
-    for field in ("name", "vendor"):
-        if not isinstance(data[field], str) or not data[field].strip():
-            return {"message": f"Invalid {field}"}, 400
+    data = request.get_json(silent=True)
 
-    if not isinstance(data["mgmt_address"], str) or not is_valid_ip(data["mgmt_address"]):
-        return {"message": "Invalid management IP address"}, 400
+    if not is_valid_device_data(data):
+        return {"message": "Invalid device data"}, 400
 
     device.name = data["name"].strip()
     device.vendor = data["vendor"].strip()
@@ -95,4 +76,26 @@ def update_device(device_id):
         return {"message": "Database integrity constraint violated"}, 409
 
     return {"message": "Device updated successfully"}
-    
+
+@devices_bp.route("/<int:device_id>", methods=["PATCH"])
+def patch_device(device_id):
+    device = db.session.get(Device, device_id)
+    if not device:
+        return {"message": "Device not found"}, 404
+
+    data = request.get_json(silent=True)
+
+    if not is_valid_device_data(data, partial=True):
+        return {"message": "Invalid device data"}, 400
+
+    for field in ("name", "vendor", "mgmt_address"):
+        if field in data:
+            setattr(device, field, data[field].strip())
+
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return {"message": "Database integrity constraint violated"}, 409
+
+    return {"message": "Device updated successfully"}, 200
